@@ -31,10 +31,11 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
     });
   }
 
+  @override
   Stream<int> copyAssetToLocalStorageWithProgress(String assetName, String targetName) {
     _getLocalFilePath(targetName).then(
       (targetPath) => methodChannel.invokeMethod('copyAssetToLocalWithProgress', {
-        'assetName': assetName,
+        'assetName': 'assets/$assetName',
         'targetPath': targetPath,
       }),
     );
@@ -42,6 +43,7 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
     return progressChannel.receiveBroadcastStream().map((event) => event as int);
   }
 
+  @override
   Stream<int> copyUrlToLocalStorageWithProgress(String url, String targetName) {
     _getLocalFilePath(targetName).then(
       (targetPath) => methodChannel.invokeMethod('copyUrlToLocalWithProgress', {

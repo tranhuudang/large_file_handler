@@ -1,212 +1,178 @@
-import Flutter
-import UIKit
+package com.example.large_file_handler
 
-public class SwiftLargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
+import android.os.Handler
+import android.os.Looper
+import android.content.res.AssetManager
+import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.EventChannel
+import io.flutter.embedding.engine.loader.FlutterLoader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
 
-  private var eventSink: FlutterEventSink?
+class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
+  private lateinit var channel: MethodChannel
+  private lateinit var assetManager: AssetManager
+  private lateinit var flutterLoader: FlutterLoader
+  private var eventSink: EventChannel.EventSink? = null
+  private val handler = Handler(Looper.getMainLooper())
 
-  public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "large_file_handler", binaryMessenger: registrar.messenger())
-    let eventChannel = FlutterEventChannel(name: "file_download_progress", binaryMessenger: registrar.messenger())
-    let instance = SwiftLargeFileHandlerPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-    eventChannel.setStreamHandler(instance)
+  override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "large_file_handler")
+    channel.setMethodCallHandler(this)
+    EventChannel(flutterPluginBinding.binaryMessenger, "file_download_progress").setStreamHandler(this)
+    assetManager = flutterPluginBinding.applicationContext.assets
+
+    flutterLoader = FlutterLoader()
+    flutterLoader.startInitialization(flutterPluginBinding.applicationContext)
+    flutterLoader.ensureInitializationComplete(flutterPluginBinding.applicationContext, null)
   }
 
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-      case "copyAssetToLocal":
-      guard let args = call.arguments as? [String: Any],
-      let assetName = args["assetName"] as? String,
-      let targetPath = args["targetPath"] as? String else {
-      result(FlutterError(code: "ERROR", message: "Invalid arguments", details: nil))
-      return
-    }
-      copyAssetToLocal(assetName: assetName, targetPath: targetPath, result: result)
-
-      case "copyAssetToLocalWithProgress":
-      guard let args = call.arguments as? [String: Any],
-      let assetName = args["assetName"] as? String,
-      let targetPath = args["targetPath"] as? String else {
-      result(FlutterError(code: "ERROR", message: "Invalid arguments", details: nil))
-      return
-    }
-      DispatchQueue.global().async {
-        self.copyAssetToLocalWithProgress(assetName: assetName, targetPath: targetPath, result: result)
-      }
-
-      case "copyUrlToLocal":
-      guard let args = call.arguments as? [String: Any],
-      let url = args["url"] as? String,
-      let targetPath = args["targetPath"] as? String else {
-      result(FlutterError(code: "ERROR", message: "Invalid arguments", details: nil))
-      return
-    }
-      DispatchQueue.global().async {
-        self.downloadFileFromUrl(url: url, targetPath: targetPath, result: result)
-      }
-
-      case "copyUrlToLocalWithProgress":
-      guard let args = call.arguments as? [String: Any],
-      let url = args["url"] as? String,
-      let targetPath = args["targetPath"] as? String else {
-      result(FlutterError(code: "ERROR", message: "Invalid arguments", details: nil))
-      return
-    }
-      DispatchQueue.global().async {
-        self.downloadFileFromUrlWithProgress(url: url, targetPath: targetPath, result: result)
-      }
-
-      default:
-      result(FlutterMethodNotImplemented)
-    }
-  }
-
-  private func copyAssetToLocal(assetName: String, targetPath: String, result: @escaping FlutterResult) {
-    DispatchQueue.main.async {
-      do {
-        if let asset = NSDataAsset(name: assetName) {
-          let data = asset.data
-                  let fileURL = URL(fileURLWithPath: targetPath)
-          try data.write(to: fileURL)
-            result(nil)
-          } else {
-          result(FlutterError(code: "ERROR", message: "Failed to load asset", details: nil))
-        }
-      } catch {
-        result(FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
-      }
-    }
-  }
-
-  private func copyAssetToLocalWithProgress(assetName: String, targetPath: String, result: @escaping FlutterResult) {
-    do {
-      if let asset = NSDataAsset(name: assetName) {
-        let data = asset.data
-                let fileURL = URL(fileURLWithPath: targetPath)
-        let totalBytes = Int64(data.count)
-        var bytesWritten: Int64 = 0
-        let bufferSize = 1024
-        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        let inputStream = InputStream(data: data)
-        let outputStream = OutputStream(url: fileURL, append: false)
-        inputStream.open()
-        outputStream?.open()
-        defer {
-          inputStream.close()
-          outputStream?.close()
-          buffer.deallocate()
-        }
-
-        while inputStream.hasBytesAvailable {
-          let bytesRead = inputStream.read(buffer, maxLength: bufferSize)
-          if bytesRead <= 0 { break }
-          outputStream?.write(buffer, maxLength: bytesRead)
-          bytesWritten += Int64(bytesRead)
-          let progress = (Double(bytesWritten) / Double(totalBytes)) * 100
-          DispatchQueue.main.async {
-            self.eventSink?(Int(progress))
-          }
-        }
-        DispatchQueue.main.async {
-          self.eventSink?(100)
-          result(nil)
-        }
-      } else {
-        DispatchQueue.main.async {
-          result(FlutterError(code: "ERROR", message: "Failed to load asset", details: nil))
+  override fun onMethodCall(call: MethodCall, result: Result) {
+    when (call.method) {
+      "copyAssetToLocal" -> {
+        val assetName = call.argument<String>("assetName")!!
+        val targetPath = call.argument<String>("targetPath")!!
+        try {
+          val assetStream = assetManager.open(flutterLoader.getLookupKeyForAsset(assetName))
+          copyStreamToFile(assetStream, targetPath)
+          handler.post { result.success(null) }
+        } catch (e: IOException) {
+          handler.post { result.error("ERROR", "Failed to copy asset", e) }
         }
       }
-    } catch {
-      DispatchQueue.main.async {
-        result(FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
-      }
-    }
-  }
-
-  private func downloadFileFromUrl(url: String, targetPath: String, result: @escaping FlutterResult) {
-    guard let fileUrl = URL(string: url) else {
-      DispatchQueue.main.async {
-        result(FlutterError(code: "DOWNLOAD_FAILED", message: "Invalid URL", details: nil))
-      }
-      return
-    }
-    do {
-      let data = try Data(contentsOf: fileUrl)
-        let fileURL = URL(fileURLWithPath: targetPath)
-        try data.write(to: fileURL)
-          DispatchQueue.main.async {
-            result(nil)
-          }
-        } catch {
-          DispatchQueue.main.async {
-            result(FlutterError(code: "DOWNLOAD_FAILED", message: "Error during file download: \(error.localizedDescription)", details: nil))
+      "copyAssetToLocalWithProgress" -> {
+        val assetName = call.argument<String>("assetName")!!
+        val targetPath = call.argument<String>("targetPath")!!
+        CoroutineScope(Dispatchers.IO).launch {
+          try {
+            val assetStream = assetManager.open(flutterLoader.getLookupKeyForAsset(assetName))
+            val totalBytes = assetStream.available().toLong()
+            copyStreamToFileWithProgress(assetStream, targetPath, totalBytes)
+            handler.post { result.success(null) }
+          } catch (e: IOException) {
+            handler.post { result.error("ERROR", "Failed to copy asset", e) }
           }
         }
       }
-
-  private func downloadFileFromUrlWithProgress(url: String, targetPath: String, result: @escaping FlutterResult) {
-    guard let fileUrl = URL(string: url) else {
-      DispatchQueue.main.async {
-        result(FlutterError(code: "DOWNLOAD_FAILED", message: "Invalid URL", details: nil))
+      "copyUrlToLocal" -> {
+        val url = call.argument<String>("url")!!
+        val targetPath = call.argument<String>("targetPath")!!
+        CoroutineScope(Dispatchers.IO).launch {
+          try {
+            val inputStream = downloadFileFromUrl(url)
+            copyStreamToFile(inputStream, targetPath)
+            handler.post { result.success(null) }
+          } catch (e: Exception) {
+            handler.post { result.error("DOWNLOAD_FAILED", "Error during file download: ${e.message}", null) }
+          }
+        }
       }
+      "copyUrlToLocalWithProgress" -> {
+        val url = call.argument<String>("url")!!
+        val targetPath = call.argument<String>("targetPath")!!
+        CoroutineScope(Dispatchers.IO).launch {
+          try {
+            val inputStream = downloadFileFromUrl(url)
+            val totalBytes = getContentLength(url)
+            copyStreamToFileWithProgress(inputStream, targetPath, totalBytes)
+            handler.post { result.success(null) }
+          } catch (e: Exception) {
+            handler.post { result.error("DOWNLOAD_FAILED", "Error during file download: ${e.message}", null) }
+          }
+        }
+      }
+      else -> result.notImplemented()
+    }
+  }
+
+  private fun downloadFileFromUrl(url: String): InputStream {
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).build()
+    val response = client.newCall(request).execute()
+
+    if (!response.isSuccessful) {
+      throw IOException("Failed to download file: ${response.code}")
+    }
+
+    return response.body?.byteStream() ?: throw IOException("Response body is null")
+  }
+
+  private fun getContentLength(url: String): Long {
+    val client = OkHttpClient()
+    val request = Request.Builder().url(url).head().build()
+    val response = client.newCall(request).execute()
+
+    if (!response.isSuccessful) {
+      throw IOException("Failed to fetch content length: ${response.code}")
+    }
+
+    return response.header("Content-Length")?.toLong() ?: 0L
+  }
+
+  private fun copyStreamToFile(inputStream: InputStream, targetPath: String) {
+    inputStream.use { input ->
+      FileOutputStream(File(targetPath)).use { output ->
+        val buffer = ByteArray(1024)
+        var length: Int
+        while (input.read(buffer).also { length = it } > 0) {
+          output.write(buffer, 0, length)
+        }
+      }
+    }
+  }
+
+  private fun copyStreamToFileWithProgress(inputStream: InputStream, targetPath: String, totalBytes: Long) {
+    if (totalBytes == 0L) {
+      handler.post { eventSink?.success(0) }
+      inputStream.use { input ->
+        FileOutputStream(File(targetPath)).use { output ->
+          val buffer = ByteArray(1024)
+          var bytesRead: Int
+          while (input.read(buffer).also { bytesRead = it } > 0) {
+            output.write(buffer, 0, bytesRead)
+          }
+        }
+      }
+      handler.post { eventSink?.success(100) }
       return
     }
 
-    let task = URLSession.shared.downloadTask(with: fileUrl) { (tempURL, response, error) in
-      if let error = error {
-        DispatchQueue.main.async {
-          result(FlutterError(code: "DOWNLOAD_FAILED", message: "Error during file download: \(error.localizedDescription)", details: nil))
+    inputStream.use { input ->
+      FileOutputStream(File(targetPath)).use { output ->
+        val buffer = ByteArray(1024)
+        var bytesRead: Int
+        var totalRead: Long = 0
+
+        while (input.read(buffer).also { bytesRead = it } > 0) {
+          output.write(buffer, 0, bytesRead)
+          totalRead += bytesRead
+          val progress = (totalRead * 100 / totalBytes).toInt()
+          handler.post { eventSink?.success(progress) }
         }
-        return
-      }
-
-      guard let tempURL = tempURL, let response = response else {
-        DispatchQueue.main.async {
-          result(FlutterError(code: "DOWNLOAD_FAILED", message: "Unknown error", details: nil))
-        }
-        return
-      }
-
-      let totalBytes = response.expectedContentLength
-      var bytesWritten: Int64 = 0
-
-      do {
-        let fileURL = URL(fileURLWithPath: targetPath)
-        try FileManager.default.moveItem(at: tempURL, to: fileURL)
-          bytesWritten = totalBytes
-          DispatchQueue.main.async {
-            self.eventSink?(100)
-            result(nil)
-          }
-        } catch {
-          DispatchQueue.main.async {
-            result(FlutterError(code: "DOWNLOAD_FAILED", message: "Error during file download: \(error.localizedDescription)", details: nil))
-          }
-        }
-      }
-
-    task.resume()
-
-    task.progress.addObserver(self, forKeyPath: #keyPath(Progress.fractionCompleted), options: [.new], context: nil)
-  }
-
-  override public func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-    if keyPath == #keyPath(Progress.fractionCompleted), let progress = object as? Progress {
-      DispatchQueue.main.async {
-        let percentage = Int(progress.fractionCompleted * 100)
-        self.eventSink?(percentage)
       }
     }
   }
 
-  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+  override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
     eventSink = events
-    return nil
   }
 
-  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    eventSink = nil
-    return nil
+  override fun onCancel(arguments: Any?) {
+    eventSink = null
+  }
+
+  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    channel.setMethodCallHandler(null)
   }
 }
