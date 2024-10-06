@@ -5,8 +5,9 @@ The **Large File Handler Plugin** designed to efficiently work with large files,
 ## Features
 
 - Copy any asset from your Flutter project to the local file system.
-- Download any asset from your Flutter project to the local file system.
+- Download files from a network to the local file system.
 - Cross-platform support for both Android and iOS.
+- Copy files with or without progress tracking.
 
 ## Installation
 
@@ -14,7 +15,7 @@ To install the plugin, add the following line to your `pubspec.yaml` under the d
 
 ```yaml
 dependencies:
-  large_file_handler: ^0.1.0
+  large_file_handler: ^0.2.0
 ```
 
 Then, run:
@@ -36,6 +37,8 @@ flutter:
 
 ### 2.  Copy asset to native local file system
 
+#### Without progress tracking:
+
 Use the plugin to copy the asset to a local path on the device:
 
 ```dart
@@ -47,8 +50,31 @@ Future<void> copyAssetToLocal() async {
     const assetName = 'example.json';
     const targetPath = 'example.json';
 
-    await AssetCopy.copyAssetToLocalStorage(assetName, targetPath);
+    await LargeFileHandler().copyAssetToLocalStorage(assetName: assetName, targetPath: targetPath);
     status = 'File copied successfully to $targetPath';
+  } on PlatformException catch (e) {
+    status = 'Failed to copy asset: ${e.message}';
+  }
+}
+```
+
+#### With progress tracking:
+
+You can also track the progress of copying the asset using the stream:
+
+```dart
+import 'package:large_file_handler/large_file_handler.dart';
+
+Future<void> copyAssetToLocalWithProgress() async {
+  String status;
+  try {
+    const assetName = 'example.json';
+    const targetPath = 'example.json';
+
+    final progressStream = LargeFileHandler().copyAssetToLocalStorageWithProgress(assetName: assetName, targetPath: targetPath);
+    progressStream.listen((progress) {
+      print('Progress: $progress%');
+    });
   } on PlatformException catch (e) {
     status = 'Failed to copy asset: ${e.message}';
   }
@@ -63,6 +89,8 @@ Make sure the asset file is uploaded to network or cloud storage.
 
 ### 2.  Download asset to native local file system
 
+#### Without progress tracking:
+
 Use the plugin to download the asset to a local path on the device:
 
 ```dart
@@ -74,8 +102,31 @@ Future<void> copyCloudToLocal() async {
     const url = 'https://cloud/example.json';
     const targetPath = 'example.json';
 
-    await AssetCopy.copyUrlToLocalStorage(url, targetPath);
+    await LargeFileHandler().copyNetworkAssetToLocalStorage(assetUrl: url, targetPath: targetPath);
     status = 'File downloaded successfully to $targetPath';
+  } on PlatformException catch (e) {
+    status = 'Failed to download asset: ${e.message}';
+  }
+}
+```
+
+#### With progress tracking:
+
+You can also track the progress of downloading the file:
+
+```dart
+import 'package:large_file_handler/large_file_handler.dart';
+
+Future<void> copyCloudToLocal() async {
+  String status;
+  try {
+    const url = 'https://cloud/example.json';
+    const targetPath = 'example.json';
+
+    final progressStream = LargeFileHandler().copyNetworkAssetToLocalStorageWithProgress(assetUrl: url, targetPath: targetPath);
+    progressStream.listen((progress) {
+      print('Download progress: $progress%');
+    });
   } on PlatformException catch (e) {
     status = 'Failed to download asset: ${e.message}';
   }

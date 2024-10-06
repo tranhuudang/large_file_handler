@@ -10,6 +10,9 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
   @visibleForTesting
   final methodChannel = const MethodChannel('large_file_handler');
 
+  @visibleForTesting
+  final progressChannel = const EventChannel('file_download_progress');
+
   @override
   Future<void> copyAssetToLocalStorage(String assetName, String targetName) async {
     final String targetPath = await _getLocalFilePath(targetName);
@@ -26,6 +29,28 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
       'url': url,
       'targetPath': targetPath,
     });
+  }
+
+  Stream<int> copyAssetToLocalStorageWithProgress(String assetName, String targetName) {
+    _getLocalFilePath(targetName).then(
+      (targetPath) => methodChannel.invokeMethod('copyAssetToLocalWithProgress', {
+        'assetName': assetName,
+        'targetPath': targetPath,
+      }),
+    );
+
+    return progressChannel.receiveBroadcastStream().map((event) => event as int);
+  }
+
+  Stream<int> copyUrlToLocalStorageWithProgress(String url, String targetName) {
+    _getLocalFilePath(targetName).then(
+      (targetPath) => methodChannel.invokeMethod('copyUrlToLocalWithProgress', {
+        'url': url,
+        'targetPath': targetPath,
+      }),
+    );
+
+    return progressChannel.receiveBroadcastStream().map((event) => event as int);
   }
 
   Future<String> _getLocalFilePath(String fileName) async {
