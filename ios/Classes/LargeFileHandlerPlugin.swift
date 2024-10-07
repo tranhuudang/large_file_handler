@@ -146,6 +146,8 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
 
       DispatchQueue.main.async {
         self.eventSink?(100)
+        self.eventSink?(FlutterEndOfEventStream)
+        self.eventSink = nil
         result(nil)
       }
     } catch {

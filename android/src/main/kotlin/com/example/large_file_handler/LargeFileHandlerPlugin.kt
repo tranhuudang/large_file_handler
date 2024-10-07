@@ -144,7 +144,11 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
           }
         }
       }
-      handler.post { eventSink?.success(100) }
+      handler.post {
+        eventSink?.success(100)
+        eventSink?.endOfStream()
+        eventSink = null
+      }
       return
     }
 
@@ -161,6 +165,11 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
           handler.post { eventSink?.success(progress) }
         }
       }
+    }
+
+    handler.post {
+      eventSink?.endOfStream()
+      eventSink = null
     }
   }
 
