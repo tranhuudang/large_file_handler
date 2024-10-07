@@ -43,12 +43,14 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
       "copyAssetToLocal" -> {
         val assetName = call.argument<String>("assetName")!!
         val targetPath = call.argument<String>("targetPath")!!
-        try {
-          val assetStream = assetManager.open(flutterLoader.getLookupKeyForAsset(assetName))
-          copyStreamToFile(assetStream, targetPath)
-          handler.post { result.success(null) }
-        } catch (e: IOException) {
-          handler.post { result.error("ERROR", "Failed to copy asset", e) }
+        CoroutineScope(Dispatchers.IO).launch {
+          try {
+            val assetStream = assetManager.open(flutterLoader.getLookupKeyForAsset(assetName))
+            copyStreamToFile(assetStream, targetPath)
+            handler.post { result.success(null) }
+          } catch (e: IOException) {
+            handler.post { result.error("ERROR", "Failed to copy asset", e) }
+          }
         }
       }
       "copyAssetToLocalWithProgress" -> {

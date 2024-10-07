@@ -6,3 +6,5 @@ Added progress tracking
 Fixed issues
 ## 0.2.2
 Fixed stream issues
+## 0.2.3
+Async fixes

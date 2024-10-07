@@ -32,7 +32,7 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     }
   }
 
-  private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterResult) {
+private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = extractArguments(call: call, requiredKeys: ["assetName", "targetPath"]),
           let assetName = args["assetName"] as? String,
           let targetPath = args["targetPath"] as? String else {
@@ -40,13 +40,20 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
       return
     }
 
-    do {
-      try copyAsset(assetName: assetName, targetPath: targetPath)
-      result(nil)
-    } catch {
-      result(FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
+    DispatchQueue.global().async {
+      do {
+        try self.copyAsset(assetName: assetName, targetPath: targetPath)
+        DispatchQueue.main.async {
+          result(nil)
+        }
+      } catch {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "ERROR", message: "Failed to copy asset", details: error.localizedDescription))
+        }
+      }
     }
   }
+
 
   private func handleCopyAssetWithProgress(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = extractArguments(call: call, requiredKeys: ["assetName", "targetPath"]),
