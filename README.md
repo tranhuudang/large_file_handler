@@ -15,7 +15,7 @@ To install the plugin, add the following line to your `pubspec.yaml` under the d
 
 ```yaml
 dependencies:
-  large_file_handler: ^0.2.0
+  large_file_handler: ^0.3.1
 ```
 
 Then, run:
