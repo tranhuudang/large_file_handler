@@ -30,4 +30,7 @@ abstract class LargeFileHandlerPlatform extends PlatformInterface {
   Stream<int> copyAssetToLocalStorageWithProgress(String assetName, String targetName);
 
   Stream<int> copyUrlToLocalStorageWithProgress(String url, String targetName);
+
+  Future<bool> fileExists(String targetPath);
+
 }

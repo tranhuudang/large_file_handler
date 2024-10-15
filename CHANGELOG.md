@@ -8,3 +8,5 @@ Fixed issues
 Fixed stream issues
 ## 0.2.3
 Async fixes
+## 0.3.0
+FileExists method added

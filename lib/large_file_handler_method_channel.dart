@@ -55,6 +55,15 @@ class MethodChannelLargeFileHandler extends LargeFileHandlerPlatform {
     return progressChannel.receiveBroadcastStream().map((event) => event as int);
   }
 
+  @override
+  Future<bool> fileExists(String targetName) async {
+    final String targetPath = await _getLocalFilePath(targetName);
+    final bool exists = await methodChannel.invokeMethod<bool>('fileExists', {
+      'targetPath': targetPath,
+    }) ?? false;
+    return exists;
+  }
+
   Future<String> _getLocalFilePath(String fileName) async {
     final directory = await getApplicationDocumentsDirectory();
     return '${directory.path}/$fileName';

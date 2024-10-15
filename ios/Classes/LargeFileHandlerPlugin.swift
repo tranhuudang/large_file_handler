@@ -27,10 +27,24 @@ public class LargeFileHandlerPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     case "copyUrlToLocalWithProgress":
       handleCopyUrlWithProgress(call: call, result: result)
 
+    case "fileExists":
+      handleFileExists(call: call, result: result)
+
     default:
       result(FlutterMethodNotImplemented)
     }
   }
+
+private func handleFileExists(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = extractArguments(call: call, requiredKeys: ["targetPath"]),
+          let targetPath = args["targetPath"] as? String else {
+        result(FlutterError(code: "INVALID_ARGUMENT", message: "Invalid arguments", details: nil))
+        return
+    }
+
+    let fileExists = FileManager.default.fileExists(atPath: targetPath)
+    result(fileExists)
+}
 
 private func handleCopyAsset(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = extractArguments(call: call, requiredKeys: ["assetName", "targetPath"]),

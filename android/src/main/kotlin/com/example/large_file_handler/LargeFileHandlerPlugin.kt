@@ -94,6 +94,15 @@ class LargeFileHandlerPlugin : FlutterPlugin, MethodCallHandler, EventChannel.St
           }
         }
       }
+      "fileExists" -> {
+        val targetPath = call.argument<String>("targetPath")!!
+        val file = File(targetPath)
+        if (file.exists()) {
+          result.success(true)
+        } else {
+          result.success(false)
+        }
+      }
       else -> result.notImplemented()
     }
   }

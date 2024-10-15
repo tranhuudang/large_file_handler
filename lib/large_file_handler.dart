@@ -15,4 +15,7 @@ class LargeFileHandler {
   Stream<int> copyNetworkAssetToLocalStorageWithProgress(
           {required String assetUrl, required String targetPath}) =>
       LargeFileHandlerPlatform.instance.copyUrlToLocalStorageWithProgress(assetUrl, targetPath);
+
+  Future<bool> fileExists({required String targetPath}) =>
+      LargeFileHandlerPlatform.instance.fileExists(targetPath);
 }
